@@ -39,9 +39,245 @@
 .history-content {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 40px 20px;
+  padding: 24px 20px;
 }
 
+/* 통계 카드 */
+.stats-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.stats-card h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 20px 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.stat-item {
+  background: #f9fafb;
+  padding: 16px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.stat-item.danger {
+  background: #fef2f2;
+}
+
+.stat-item.success {
+  background: #f0fdf4;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.stat-item.danger .stat-value {
+  color: #ef4444;
+}
+
+.stat-item.success .stat-value {
+  color: #10b981;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #666;
+}
+
+/* 필터 버튼 */
+.filter-buttons {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.filter-btn {
+  padding: 12px 24px;
+  border: 2px solid #e5e7eb;
+  background: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.filter-btn:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+.filter-btn.active {
+  background: #6366f1;
+  border-color: #6366f1;
+  color: white;
+}
+
+/* 세션 목록 */
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.session-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+  border: 2px solid transparent;
+}
+
+.session-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.session-card.danger {
+  border-color: #fee2e2;
+  background: linear-gradient(to right, #fef2f2, white);
+}
+
+.session-card.safe {
+  border-color: #dcfce7;
+  background: linear-gradient(to right, #f0fdf4, white);
+}
+
+/* 상태 배지 */
+.session-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.session-card.danger .session-badge {
+  background: #ef4444;
+  color: white;
+}
+
+.session-card.safe .session-badge {
+  background: #10b981;
+  color: white;
+}
+
+.badge-icon {
+  font-size: 16px;
+}
+
+/* 세션 정보 */
+.session-info {
+  flex: 1;
+}
+
+.session-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.session-time {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 4px 0;
+}
+
+.session-duration {
+  font-size: 12px;
+  color: #999;
+  margin: 0;
+}
+
+/* 통계 */
+.session-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+  min-width: 150px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.stat-row .stat-label {
+  font-size: 13px;
+  color: #666;
+}
+
+.stat-row .stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.stat-row.danger .stat-value {
+  color: #ef4444;
+}
+
+/* 삭제 버튼 */
+.delete-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #fee2e2;
+  color: #ef4444;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  opacity: 0.7;
+}
+
+.delete-button:hover {
+  opacity: 1;
+  background: #ef4444;
+  color: white;
+  transform: scale(1.1);
+}
+
+/* 화살표 */
+.session-arrow {
+  color: #9ca3af;
+}
+
+/* 빈 상태 */
 .empty-state {
   text-align: center;
   padding: 80px 20px;
@@ -63,4 +299,34 @@
   font-size: 16px;
   color: #666;
   line-height: 1.6;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .session-card {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .session-badge {
+    justify-content: center;
+  }
+
+  .session-stats {
+    min-width: auto;
+  }
+
+  .delete-button {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+  }
+
+  .session-arrow {
+    display: none;
+  }
 }
