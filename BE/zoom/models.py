@@ -29,6 +29,12 @@ class ZoomSession(models.Model):
         default='active',
         verbose_name='세션 상태'
     )
+
+    last_ai_analysis_time = models.DateTimeField(
+        null=True, 
+        blank=True, 
+        verbose_name='마지막 AI 분석 시간'
+    )
     
     class Meta:
         db_table = 'zoom_sessions'

@@ -10,7 +10,8 @@ from .serializers import (
     ZoomSessionSerializer,
     ZoomCaptureSerializer,
     ZoomSessionStartSerializer,
-    ZoomCaptureRequestSerializer
+    ZoomCaptureRequestSerializer,
+    ZoomCaptureDetailSerializer
 )
 from detection.models import AnalysisRecord
 from detection.services import AIModelService
@@ -46,7 +47,12 @@ class ZoomSessionStartView(APIView):
 
 
 class ZoomCaptureView(APIView):
-    """Zoom 캡처 분석 API"""
+    """
+    Zoom 캡처 분석 API (30초 간격 제어)
+    
+    프론트엔드: 5초마다 캡처 → 즉시 백엔드 전송
+    백엔드: 30초에 1번만 AI 서버로 전송 (과부하 방지)
+    """
     
     def post(self, request, session_id):
         serializer = ZoomCaptureRequestSerializer(data=request.data)
@@ -73,51 +79,89 @@ class ZoomCaptureView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # ✅ FileService 사용
+        # ✅ 30초 경과 확인
+        now = timezone.now()
+        should_analyze = False
+        
+        if session.last_ai_analysis_time is None:
+            # 첫 캡처 → 즉시 분석
+            should_analyze = True
+        else:
+            # 마지막 AI 분석으로부터 30초 경과 여부 확인
+            time_since_last_analysis = (now - session.last_ai_analysis_time).total_seconds()
+            if time_since_last_analysis >= 30:
+                should_analyze = True
+        
+        # ✅ FileService로 파일 저장
         file_service = FileService(request.user)
         
         try:
-            # ✅ 통합 파일 업로드
+            # 파일 업로드 (S3 사용)
             media_file = file_service.upload_file(
                 uploaded_file=screenshot,
                 file_type='screenshot',
                 purpose='zoom',
-                is_temporary=True,  # 분석 후 삭제
+                is_temporary=True,
                 metadata={'session_id': session_id},
-                use_s3=False
+                use_s3=True
             )
             
-            # AI 분석
-            ai_service = AIModelService()
-            full_path = os.path.join(settings.MEDIA_ROOT, media_file.file_path)
-            result = ai_service.analyze_image(full_path)
+            # S3 URL 생성
+            from media_files.storage import S3Storage
             
-            if not result['success']:
-                return Response(
-                    {'error': result['error']},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            
-            # ✅ 새로운 API 명세에 맞춰 분석 결과 계산
-            if 'face_quality_scores' in result:
-                # 새로운 다중 얼굴 감지 방식
-                face_scores = result['face_quality_scores']
-                is_any_deepfake = any(face['is_deepfake'] for face in face_scores)
-                avg_confidence = sum(face['rate'] for face in face_scores) / len(face_scores) if face_scores else 0
-                
-                # 분석 결과 결정
-                if is_any_deepfake:
-                    analysis_result = 'deepfake' if avg_confidence >= 0.8 else 'suspicious'
-                else:
-                    analysis_result = 'safe'
-                
-                confidence_score = avg_confidence * 100  # 0-100 스케일
-                detection_details = face_scores
+            if media_file.storage_type == 's3':
+                s3_storage = S3Storage()
+                s3_url = s3_storage.get_presigned_url(media_file.s3_key)
             else:
-                # 이전 방식 (하위 호환)
-                analysis_result = result.get('analysis_result', 'safe')
-                confidence_score = result.get('confidence_score', 0)
+                s3_url = request.build_absolute_uri(f'/media/{media_file.file_path}')
+            
+            # ✅ AI 분석 여부 결정
+            if should_analyze:
+                # AI 분석 수행
+                ai_service = AIModelService()
+                result = ai_service.analyze_image(s3_url)
+                
+                if not result['success']:
+                    # AI 분석 실패 시 기본값
+                    analysis_result = 'safe'
+                    confidence_score = 0
+                    detection_details = None
+                else:
+                    # ResultUrl Presigned URL 변환
+                    import re
+                    for face in result['face_quality_scores']:
+                        if 'ResultUrl' in face and face['ResultUrl']:
+                            original_url = face['ResultUrl']
+                            match = re.search(r'amazonaws\.com/(.+?)$', original_url)
+                            if match:
+                                s3_key = match.group(1)
+                                s3_storage = S3Storage()
+                                face['ResultUrl'] = s3_storage.get_presigned_url(s3_key)
+                    
+                    # 분석 결과 처리
+                    face_scores = result['face_quality_scores']
+                    is_any_deepfake = any(face['is_deepfake'] for face in face_scores)
+                    avg_confidence = sum(face['rate'] for face in face_scores) / len(face_scores) if face_scores else 0
+                    
+                    if is_any_deepfake:
+                        analysis_result = 'deepfake' if avg_confidence >= 0.8 else 'suspicious'
+                    else:
+                        analysis_result = 'safe'
+                    
+                    confidence_score = avg_confidence * 100
+                    detection_details = face_scores
+                
+                # ✅ 마지막 AI 분석 시간 업데이트 (중요!)
+                session.last_ai_analysis_time = now
+                session.save(update_fields=['last_ai_analysis_time'])
+                
+                processing_time = result.get('processing_time', 0)
+            else:
+                # ✅ AI 분석 스킵 (30초 미경과)
+                analysis_result = 'safe'
+                confidence_score = 0
                 detection_details = None
+                processing_time = 0
             
             # 분석 기록 저장
             record = AnalysisRecord.objects.create(
@@ -130,11 +174,11 @@ class ZoomCaptureView(APIView):
                 analysis_result=analysis_result,
                 confidence_score=confidence_score,
                 detection_details=detection_details,
-                processing_time=result['processing_time'],
+                processing_time=processing_time,
                 ai_model_version='v1.0'
             )
             
-            # ✅ 관계 연결
+            # 관계 연결
             media_file.related_model = 'AnalysisRecord'
             media_file.related_record_id = record.record_id
             media_file.save()
@@ -155,15 +199,23 @@ class ZoomCaptureView(APIView):
                 session.suspicious_detections += 1
             session.save()
             
-            # ✅ 임시 파일 즉시 삭제
-            file_service.delete_file(media_file.file_id, hard_delete=True)
-            
+            # ✅ 즉시 응답
             return Response({
                 'capture_id': capture.capture_id,
+                'session_id': session.session_id,  # ✅ 추가
+                'image_url': None,  # 일단 None (조회 API에서 제공)
+                'timestamp': capture.capture_timestamp.isoformat(),  # ✅ 추가
                 'is_deepfake': is_deepfake,
-                'confidence_score': float(confidence_score),  # ← 변수 사용!
-                'analysis_result': analysis_result,  # ← 변수 사용!
-                'alert_triggered': is_deepfake
+                'confidence': float(confidence_score),  # ✅ confidence_score → confidence
+                'ai_result': {  # ✅ 구조 변경
+                    'face_count': len(detection_details) if detection_details else 0,
+                    'face_quality_scores': detection_details or []
+                },
+                # 기존 필드들 (호환성)
+                'queued': not should_analyze,
+                'ai_analyzed': should_analyze,
+                'analysis_result': analysis_result,
+                'next_analysis_in': 30 if should_analyze else int(30 - time_since_last_analysis)
             }, status=status.HTTP_201_CREATED)
         
         except ValueError as e:
@@ -171,6 +223,9 @@ class ZoomCaptureView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+
 
 
 class ZoomSessionEndView(APIView):
@@ -189,16 +244,20 @@ class ZoomSessionEndView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # 세션 종료
         session.end_time = timezone.now()
         session.session_status = 'completed'
         session.save()
         
-        return Response(
-            ZoomSessionSerializer(session).data,
-            status=status.HTTP_200_OK
-        )
-
+        # ✅ 응답 구조 변경
+        return Response({
+            'session_id': session.session_id,
+            'session_name': session.session_name,
+            'start_time': session.start_time.isoformat(),
+            'end_time': session.end_time.isoformat(),
+            'total_captures': session.total_captures,
+            'deepfake_count': session.suspicious_detections,  # ✅ 필드명 변경
+            'status': session.session_status  # ✅ session_status → status
+        }, status=status.HTTP_200_OK)
 
 class ZoomSessionListView(generics.ListAPIView):
     """Zoom 세션 목록 조회 API"""
@@ -215,7 +274,6 @@ class ZoomSessionListView(generics.ListAPIView):
         
         return queryset
 
-
 class ZoomSessionDetailView(generics.RetrieveAPIView):
     """Zoom 세션 상세 조회 API"""
     
@@ -223,6 +281,17 @@ class ZoomSessionDetailView(generics.RetrieveAPIView):
     
     def get_queryset(self):
         return ZoomSession.objects.filter(user=self.request.user)
+
+
+class ZoomCaptureDetailView(generics.RetrieveAPIView):
+    """Zoom 캡처 상세 조회 API"""
+    
+    serializer_class = ZoomCaptureDetailSerializer
+    
+    def get_queryset(self):
+        return ZoomCapture.objects.filter(
+            session__user=self.request.user
+        ).select_related('record', 'session')
 
 
 class ZoomSessionReportView(APIView):

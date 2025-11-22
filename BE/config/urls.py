@@ -18,7 +18,7 @@ urlpatterns = [
     path('api/users/', include('users.urls')),
     path('api/detection/', include('detection.urls')),
     path('api/zoom/', include('zoom.urls')),
-    path('api/protection/', include('protection.urls')),
+    #path('api/protection/', include('protection.urls')),
     # path('api/reports/', include('reports.urls')),
     path('api/files/', include('media_files.urls')),
 ]

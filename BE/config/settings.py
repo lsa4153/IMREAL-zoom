@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'users',
     'detection',
     'zoom',
-    'protection',
+    #'protection',
     # 'reports',
     'media_files',
 ]
