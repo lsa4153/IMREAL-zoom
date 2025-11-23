@@ -4,7 +4,6 @@ import { startZoomSession, sendCapture, endZoomSession } from '../utils/api'
 import { getToken, logout } from '../utils/auth'  
 import './HomePage.css'
 
-// ✅ 백엔드 API URL
 const API_BASE_URL = 'http://localhost:8000/api'
 
 function HomePage() {
@@ -12,14 +11,18 @@ function HomePage() {
   const [isRecording, setIsRecording] = useState(false)
   const [capturedImages, setCapturedImages] = useState([])
   const [showCapturedImages, setShowCapturedImages] = useState(false)
+  const [notificationPermission, setNotificationPermission] = useState(Notification.permission)
   
-  const sessionIdRef = useRef(null)  // ✅ 백엔드 세션 ID 저장
+  const sessionIdRef = useRef(null)
   const streamRef = useRef(null)
   const videoRef = useRef(null)
   const intervalRef = useRef(null)
   const capturedImagesRef = useRef([])
 
+  // ✅ 컴포넌트 마운트 시 알림 권한 요청
   useEffect(() => {
+    requestNotificationPermission()
+    
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
@@ -34,21 +37,69 @@ function HomePage() {
       })
     }
   }, [])
+
+  // ✅ 알림 권한 요청 함수
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
       console.warn('⚠️ 이 브라우저는 알림을 지원하지 않습니다')
+      alert('이 브라우저는 시스템 알림을 지원하지 않습니다.\n최신 버전의 Chrome, Firefox, Edge를 사용해주세요.')
       return
     }
 
     if (Notification.permission === 'default') {
       const permission = await Notification.requestPermission()
+      setNotificationPermission(permission)
+      
       if (permission === 'granted') {
         console.log('✅ 알림 권한이 허용되었습니다')
-        new Notification('알림 설정 완료', {
+        
+        // ✅ 테스트 알림
+        new Notification('IMREAL 알림 설정 완료', {
           body: '딥페이크 감지 시 실시간으로 알림을 받을 수 있습니다',
+          icon: '/logo-lock.png',  // 로고 경로
+          badge: '/logo-lock.png',
+          tag: 'imreal-setup',
+          requireInteraction: false  // 자동으로 사라짐
         })
+      } else if (permission === 'denied') {
+        console.warn('⚠️ 알림 권한이 거부되었습니다')
+        alert('알림 권한이 거부되었습니다.\n\n딥페이크 감지 시 실시간 알림을 받으려면 브라우저 설정에서 알림 권한을 허용해주세요.')
       }
+    } else if (Notification.permission === 'granted') {
+      setNotificationPermission('granted')
+      console.log('✅ 알림 권한이 이미 허용되어 있습니다')
     }
+  }
+
+  // ✅ 딥페이크 감지 시 시스템 알림 표시 함수
+  const showDeepfakeNotification = (confidence, captureTime) => {
+    if (Notification.permission !== 'granted') {
+      // 권한이 없으면 alert로 대체
+      alert(`🚨 딥페이크 감지!\n신뢰도: ${confidence}%`)
+      return
+    }
+
+    // ✅ Windows 시스템 알림 표시
+    const notification = new Notification('🚨 딥페이크 감지!', {
+      body: `신뢰도: ${confidence}%\n시간: ${new Date(captureTime).toLocaleTimeString('ko-KR')}`,
+      icon: '/logo-lock.png',  // 알림 아이콘
+      badge: '/logo-lock.png',  // 작은 배지 아이콘
+      tag: 'deepfake-alert',  // 같은 태그면 알림이 업데이트됨
+      requireInteraction: true,  // ✅ 사용자가 클릭할 때까지 유지
+      vibrate: [200, 100, 200],  // 진동 패턴 (모바일용)
+      silent: false,  // 소리 재생
+      timestamp: Date.now()
+    })
+
+    // ✅ 알림 클릭 시 탐지 기록 페이지로 이동
+    notification.onclick = () => {
+      window.focus()  // 브라우저 창 포커스
+      navigate('/history')
+      notification.close()
+    }
+
+    // ✅ 콘솔 로그
+    console.log('🔔 시스템 알림 표시:', { confidence, captureTime })
   }
 
   const handleLogout = async () => {
@@ -63,10 +114,19 @@ function HomePage() {
     }
   }
 
-
   const handleStartRecording = async () => {
     try {
-      // ✅ 1단계: 백엔드에 세션 시작 요청
+      // ✅ 녹화 시작 전 알림 권한 재확인
+      if (Notification.permission === 'default') {
+        await requestNotificationPermission()
+      } else if (Notification.permission === 'denied') {
+        if (window.confirm('알림 권한이 거부되어 있습니다.\n딥페이크 감지 시 실시간 알림을 받을 수 없습니다.\n\n그래도 녹화를 시작하시겠습니까?')) {
+          // 계속 진행
+        } else {
+          return
+        }
+      }
+
       const sessionName = `${new Date().toLocaleString('ko-KR')} 면접`
       const token = getToken()
       
@@ -84,10 +144,9 @@ function HomePage() {
       }
 
       const sessionData = await sessionResponse.json()
-      sessionIdRef.current = sessionData.session_id  // ✅ 세션 ID 저장
+      sessionIdRef.current = sessionData.session_id
       console.log('✅ 백엔드 세션 시작:', sessionData)
 
-      // ✅ 2단계: 화면 캡처 시작
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           mediaSource: 'screen',
@@ -108,12 +167,10 @@ function HomePage() {
       setCapturedImages([])
       capturedImagesRef.current = []
 
-      // ✅ 5초마다 캡처
       intervalRef.current = setInterval(() => {
         captureScreen()
       }, 5000)
 
-      // 첫 번째 캡처 즉시 실행
       setTimeout(() => captureScreen(), 500)
 
       console.log('🎬 녹화 시작!')
@@ -128,7 +185,6 @@ function HomePage() {
     }
   }
 
-  // ✅ 캡처 함수 (원래 코드 유지)
   const captureScreen = async () => {
     if (!videoRef.current || !streamRef.current) {
       console.warn('⚠️ 비디오 또는 스트림이 없습니다')
@@ -143,7 +199,6 @@ function HomePage() {
       const ctx = canvas.getContext('2d')
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
 
-      // Base64로 변환
       const base64Image = canvas.toDataURL('image/jpeg', 0.9)
       
       const timestamp = new Date().toISOString()
@@ -161,26 +216,22 @@ function HomePage() {
       console.log('📸 화면 캡처 완료:', timestamp)
       console.log('📊 현재 캡처 개수:', capturedImagesRef.current.length)
 
-      // ✅ 백엔드로 전송
-      await sendToBackend(base64Image)
+      await sendToBackend(base64Image, timestamp)
 
     } catch (error) {
       console.error('❌ 화면 캡처 실패:', error)
     }
   }
 
-  // ✅ 백엔드로 캡처 전송
-  const sendToBackend = async (base64Image) => {
+  const sendToBackend = async (base64Image, captureTime) => {
     try {
       const token = getToken()
       
-      // Base64를 Blob으로 변환
       const blob = await (await fetch(base64Image)).blob()
       
-      // FormData 생성
       const formData = new FormData()
       formData.append('screenshot', blob, `capture_${Date.now()}.jpg`)
-      formData.append('participant_count', 1)  // 참가자 수 (필요시 수정)
+      formData.append('participant_count', 1)
 
       const response = await fetch(
         `${API_BASE_URL}/zoom/sessions/${sessionIdRef.current}/capture/`,
@@ -200,9 +251,9 @@ function HomePage() {
       const result = await response.json()
       console.log('✅ 백엔드 전송 성공:', result)
 
-      // ✅ 딥페이크 감지 시 알림
+      // ✅ 딥페이크 감지 시 시스템 알림 표시
       if (result.is_deepfake) {
-        alert(`🚨 딥페이크 감지!\n신뢰도: ${result.confidence}%`)
+        showDeepfakeNotification(result.confidence, captureTime)
       }
 
     } catch (error) {
@@ -231,7 +282,6 @@ function HomePage() {
     const finalCount = capturedImagesRef.current.length
     console.log('⏹️ 녹화 종료!', `총 ${finalCount}개 캡처`)
 
-    // ✅ 백엔드에 세션 종료 요청
     if (sessionIdRef.current) {
       try {
         const token = getToken()
@@ -250,10 +300,37 @@ function HomePage() {
           const result = await response.json()
           console.log('✅ 세션 종료:', result)
           
+          // ✅ 세션 종료 시에도 시스템 알림
           if (result.deepfake_count > 0) {
-            alert(`🚨 딥페이크 ${result.deepfake_count}건 감지!\n탐지 기록에서 확인하세요.`)
+            if (Notification.permission === 'granted') {
+              const notification = new Notification('세션 종료 - 딥페이크 감지됨', {
+                body: `총 ${result.deepfake_count}건의 딥페이크가 감지되었습니다.\n탐지 기록에서 확인하세요.`,
+                icon: '/logo-lock.png',
+                badge: '/logo-lock.png',
+                tag: 'session-end',
+                requireInteraction: true
+              })
+              
+              notification.onclick = () => {
+                window.focus()
+                navigate('/history')
+                notification.close()
+              }
+            } else {
+              alert(`🚨 딥페이크 ${result.deepfake_count}건 감지!\n탐지 기록에서 확인하세요.`)
+            }
           } else {
-            alert('✅ 모든 참가자가 안전합니다.')
+            if (Notification.permission === 'granted') {
+              new Notification('세션 종료 - 안전', {
+                body: '모든 참가자가 안전합니다.',
+                icon: '/logo-lock.png',
+                badge: '/logo-lock.png',
+                tag: 'session-end-safe',
+                requireInteraction: false
+              })
+            } else {
+              alert('✅ 모든 참가자가 안전합니다.')
+            }
           }
         }
       } catch (error) {
@@ -295,6 +372,28 @@ function HomePage() {
         </svg>
         <span>로그아웃</span>
       </button>
+
+      {/* ✅ 알림 권한 상태 표시 (선택사항) */}
+      {notificationPermission === 'denied' && (
+        <div style={{
+          position: 'fixed',
+          top: '80px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#fef2f2',
+          border: '2px solid #ef4444',
+          borderRadius: '8px',
+          padding: '12px 20px',
+          color: '#ef4444',
+          fontSize: '14px',
+          fontWeight: '600',
+          zIndex: 100,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+        }}>
+          ⚠️ 알림 권한이 거부되어 있습니다. 브라우저 설정에서 알림을 허용해주세요.
+        </div>
+      )}
+
       <main className="main-content">
         <div className="illustration">
           <div className="laptop-illustration">
