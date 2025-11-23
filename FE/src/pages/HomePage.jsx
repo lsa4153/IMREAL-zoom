@@ -18,8 +18,8 @@ function HomePage() {
   const videoRef = useRef(null)
   const intervalRef = useRef(null)
   const capturedImagesRef = useRef([])
+  const currentNotificationRef = useRef(null)  // ✅ 현재 알림 저장
 
-  // ✅ 컴포넌트 마운트 시 알림 권한 요청
   useEffect(() => {
     requestNotificationPermission()
     
@@ -35,10 +35,13 @@ function HomePage() {
           URL.revokeObjectURL(img.url)
         }
       })
+      // ✅ 컴포넌트 언마운트 시 알림도 닫기
+      if (currentNotificationRef.current) {
+        currentNotificationRef.current.close()
+      }
     }
   }, [])
 
-  // ✅ 알림 권한 요청 함수
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
       console.warn('⚠️ 이 브라우저는 알림을 지원하지 않습니다')
@@ -53,13 +56,11 @@ function HomePage() {
       if (permission === 'granted') {
         console.log('✅ 알림 권한이 허용되었습니다')
         
-        // ✅ 테스트 알림
         new Notification('IMREAL 알림 설정 완료', {
           body: '딥페이크 감지 시 실시간으로 알림을 받을 수 있습니다',
-          icon: '/logo-lock.png',  // 로고 경로
+          icon: '/logo-lock.png',
           badge: '/logo-lock.png',
-          tag: 'imreal-setup',
-          requireInteraction: false  // 자동으로 사라짐
+          requireInteraction: false
         })
       } else if (permission === 'denied') {
         console.warn('⚠️ 알림 권한이 거부되었습니다')
@@ -71,35 +72,50 @@ function HomePage() {
     }
   }
 
-  // ✅ 딥페이크 감지 시 시스템 알림 표시 함수
+  // ✅ 딥페이크 감지 시 시스템 알림 표시 함수 (이전 알림 자동 교체)
   const showDeepfakeNotification = (confidence, captureTime) => {
     if (Notification.permission !== 'granted') {
-      // 권한이 없으면 alert로 대체
       alert(`🚨 딥페이크 감지!\n신뢰도: ${confidence}%`)
       return
     }
 
-    // ✅ Windows 시스템 알림 표시
+    // ✅ 1. 이전 알림이 있으면 닫기
+    if (currentNotificationRef.current) {
+      currentNotificationRef.current.close()
+    }
+
+    // ✅ 2. 새 알림 생성
     const notification = new Notification('🚨 딥페이크 감지!', {
       body: `신뢰도: ${confidence}%\n시간: ${new Date(captureTime).toLocaleTimeString('ko-KR')}`,
-      icon: '/logo-lock.png',  // 알림 아이콘
-      badge: '/logo-lock.png',  // 작은 배지 아이콘
-      tag: 'deepfake-alert',  // 같은 태그면 알림이 업데이트됨
-      requireInteraction: true,  // ✅ 사용자가 클릭할 때까지 유지
-      vibrate: [200, 100, 200],  // 진동 패턴 (모바일용)
-      silent: false,  // 소리 재생
-      timestamp: Date.now()
+      icon: '/logo-lock.png',
+      badge: '/logo-lock.png',
+      tag: 'deepfake-alert',  // ✅ 같은 tag 유지 (브라우저 레벨에서도 교체)
+      requireInteraction: true,
+      vibrate: [200, 100, 200],
+      silent: false,
+      timestamp: Date.now(),
+      renotify: true  // ✅ 같은 tag여도 소리/진동 다시 발생
     })
+
+    // ✅ 3. 현재 알림으로 저장
+    currentNotificationRef.current = notification
 
     // ✅ 알림 클릭 시 탐지 기록 페이지로 이동
     notification.onclick = () => {
-      window.focus()  // 브라우저 창 포커스
+      window.focus()
       navigate('/history')
       notification.close()
+      currentNotificationRef.current = null
     }
 
-    // ✅ 콘솔 로그
-    console.log('🔔 시스템 알림 표시:', { confidence, captureTime })
+    // ✅ 알림이 자동으로 닫힐 때
+    notification.onclose = () => {
+      if (currentNotificationRef.current === notification) {
+        currentNotificationRef.current = null
+      }
+    }
+
+    console.log('🔔 시스템 알림 표시 (이전 알림 교체):', { confidence, captureTime })
   }
 
   const handleLogout = async () => {
@@ -116,7 +132,6 @@ function HomePage() {
 
   const handleStartRecording = async () => {
     try {
-      // ✅ 녹화 시작 전 알림 권한 재확인
       if (Notification.permission === 'default') {
         await requestNotificationPermission()
       } else if (Notification.permission === 'denied') {
@@ -251,7 +266,7 @@ function HomePage() {
       const result = await response.json()
       console.log('✅ 백엔드 전송 성공:', result)
 
-      // ✅ 딥페이크 감지 시 시스템 알림 표시
+      // ✅ 딥페이크 감지 시 시스템 알림 표시 (이전 알림 자동 교체)
       if (result.is_deepfake) {
         showDeepfakeNotification(result.confidence, captureTime)
       }
@@ -277,6 +292,12 @@ function HomePage() {
       videoRef.current = null
     }
 
+    // ✅ 녹화 종료 시 딥페이크 알림 닫기
+    if (currentNotificationRef.current) {
+      currentNotificationRef.current.close()
+      currentNotificationRef.current = null
+    }
+
     setIsRecording(false)
     
     const finalCount = capturedImagesRef.current.length
@@ -300,14 +321,14 @@ function HomePage() {
           const result = await response.json()
           console.log('✅ 세션 종료:', result)
           
-          // ✅ 세션 종료 시에도 시스템 알림
+          // ✅ 세션 종료 시 별도 알림 (딥페이크 알림과 다른 tag)
           if (result.deepfake_count > 0) {
             if (Notification.permission === 'granted') {
               const notification = new Notification('세션 종료 - 딥페이크 감지됨', {
                 body: `총 ${result.deepfake_count}건의 딥페이크가 감지되었습니다.\n탐지 기록에서 확인하세요.`,
                 icon: '/logo-lock.png',
                 badge: '/logo-lock.png',
-                tag: 'session-end',
+                tag: 'session-end',  // 다른 tag (세션 종료 알림)
                 requireInteraction: true
               })
               
@@ -373,7 +394,6 @@ function HomePage() {
         <span>로그아웃</span>
       </button>
 
-      {/* ✅ 알림 권한 상태 표시 (선택사항) */}
       {notificationPermission === 'denied' && (
         <div style={{
           position: 'fixed',
