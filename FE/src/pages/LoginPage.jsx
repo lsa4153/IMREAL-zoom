@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { login, register, isAuthenticated } from '../utils/auth'
 import './LoginPage.css'
 
 function LoginPage() {
@@ -12,6 +13,13 @@ function LoginPage() {
     nickname: ''
   })
   const [loading, setLoading] = useState(false)
+
+  // ✅ 이미 로그인되어 있으면 홈으로 리다이렉트
+  /*useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/', { replace: true })
+    }
+  }, [navigate])*/
 
   const handleChange = (e) => {
     setFormData({
@@ -26,55 +34,43 @@ function LoginPage() {
 
     try {
       if (isLogin) {
-        const response = await fetch('http://localhost:8000/api/users/login/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password
-          })
-        })
+        // ✅ auth.js의 login 함수 사용
+        const result = await login(formData.email, formData.password)
 
-        const data = await response.json()
-
-        if (response.ok) {
-          localStorage.setItem('token', data.token)
-          localStorage.setItem('user', JSON.stringify(data.user))
-          alert('로그인 성공!')
-          navigate('/')
+        if (result.success) {
+          console.log('✅ 로그인 성공:', result.user)
+          alert(`환영합니다, ${result.user.nickname}님!`)
+          navigate('/', { replace: true })
         } else {
-          alert(data.error || '로그인 실패')
+          alert(result.error || '로그인에 실패했습니다.')
         }
       } else {
+        // ✅ 회원가입
         if (formData.password !== formData.passwordConfirm) {
           alert('비밀번호가 일치하지 않습니다.')
+          setLoading(false)
           return
         }
 
-        const response = await fetch('http://localhost:8000/api/users/register/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            password_confirm: formData.passwordConfirm,
-            nickname: formData.nickname
-          })
-        })
+        // ✅ auth.js의 register 함수 사용
+        const result = await register(
+          formData.email, 
+          formData.password, 
+          formData.nickname
+        )
 
-        const data = await response.json()
-
-        if (response.ok) {
-          alert('회원가입 성공! 로그인해주세요.')
-          setIsLogin(true)
-          setFormData({ email: '', password: '', passwordConfirm: '', nickname: '' })
+        if (result.success) {
+          console.log('✅ 회원가입 성공:', result.user)
+          alert(`회원가입 성공! 환영합니다, ${result.user.nickname}님!`)
+          // 자동 로그인되므로 바로 홈으로
+          navigate('/', { replace: true })
         } else {
-          alert(data.error || '회원가입 실패')
+          alert(result.error || '회원가입에 실패했습니다.')
         }
       }
     } catch (error) {
-      console.error('Error:', error)
-      alert('서버 연결 오류')
+      console.error('❌ 오류 발생:', error)
+      alert('서버 연결 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
