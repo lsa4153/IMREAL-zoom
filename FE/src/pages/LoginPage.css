@@ -8,8 +8,6 @@
   position: relative;
   overflow: hidden;
 }
-
-/* ✅ 배경 버블 - 청록색 그라데이션 */
 .login-background {
   position: absolute;
   inset: 0;
@@ -21,13 +19,14 @@
   position: absolute;
   border-radius: 50%;
   animation: float 20s ease-in-out infinite;
-  opacity: 0.5;
+  opacity: 0.6;  /* ✅ 조금 더 진하게 */
 }
 
 .bubble-1 {
   width: 300px;
   height: 300px;
-  background: linear-gradient(135deg, #40C4C4, #2B9A9A);
+  background: linear-gradient(135deg, #06B6D4 0%, #0891B2 50%, #0E7490 100%);
+  /* ✅ 밝은 cyan → 중간 cyan → 진한 teal */
   top: -100px;
   right: -80px;
   animation-delay: 0s;
@@ -36,7 +35,8 @@
 .bubble-2 {
   width: 250px;
   height: 250px;
-  background: linear-gradient(225deg, #2B9A9A, #40C4C4);
+  background: linear-gradient(225deg, #22D3EE 0%, #06B6D4 50%, #0891B2 100%);
+  /* ✅ 매우 밝은 cyan → 밝은 cyan → 중간 cyan */
   bottom: -100px;
   left: -60px;
   animation-delay: 5s;
@@ -45,7 +45,8 @@
 .bubble-3 {
   width: 180px;
   height: 180px;
-  background: linear-gradient(315deg, #3BC9C9, #2196A3);
+  background: linear-gradient(315deg, #0891B2 0%, #0E7490 50%, #155E75 100%);
+  /* ✅ 중간 cyan → 진한 teal → 매우 진한 teal */
   top: 40%;
   right: 10%;
   animation-delay: 10s;
@@ -54,7 +55,8 @@
 .bubble-4 {
   width: 150px;
   height: 150px;
-  background: linear-gradient(45deg, #2196A3, #40C4C4);
+  background: linear-gradient(45deg, #67E8F9 0%, #22D3EE 50%, #06B6D4 100%);
+  /* ✅ 파스텔 cyan → 밝은 cyan → 중간 cyan */
   bottom: 20%;
   right: 5%;
   animation-delay: 15s;
@@ -63,7 +65,8 @@
 .bubble-5 {
   width: 200px;
   height: 200px;
-  background: linear-gradient(180deg, #40C4C4, #2B9A9A);
+  background: linear-gradient(180deg, #0E7490 0%, #0891B2 50%, #22D3EE 100%);
+  /* ✅ 진한 teal → 중간 cyan → 밝은 cyan */
   top: 15%;
   left: 8%;
   animation-delay: 7s;
