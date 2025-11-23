@@ -386,6 +386,36 @@
 .download-button:hover {
   background: #5558e3;
 }
+.logout-button {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: white;
+  border: 2px solid #6366f1;
+  border-radius: 10px;
+  color: #6366f1;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+  z-index: 100;
+}
+
+.logout-button:hover {
+  background: #6366f1;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.logout-button svg {
+  flex-shrink: 0;
+}
 
 /* 반응형 디자인 */
 @media (max-width: 768px) {
@@ -433,5 +463,22 @@
   .view-captures-button,
   .clear-captures-button {
     width: 100%;
+  }
+  .logout-button {
+    top: 16px;
+    right: 16px;
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  
+  .logout-button span {
+    display: none; /* 모바일에서는 텍스트 숨기고 아이콘만 */
+  }
+  
+  .logout-button {
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+    padding: 0;
   }
 }

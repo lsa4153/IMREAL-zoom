@@ -1,64 +1,66 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getAllSessions, getStatistics, deleteSession } from '../utils/storage'
+import { getToken } from '../utils/auth'  // ✅ getToken만 import
 import './DetectionHistoryPage.css'
+
+const API_BASE_URL = 'http://localhost:8000/api'  // ✅ 추가
 
 function DetectionHistoryPage() {
   const navigate = useNavigate()
   const [sessions, setSessions] = useState([])
   const [stats, setStats] = useState(null)
-  const [filter, setFilter] = useState('all') // 'all' or 'deepfake'
+  const [filter, setFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     loadSessions()
   }, [])
 
-  // ✅ 수정: 유효한 세션만 필터링해서 로드
-  const loadSessions = () => {
-    const allSessions = getAllSessions()
-    
-    // ✅ 유효성 검증 필터링
-    const validSessions = allSessions.filter(session => {
-      const isValid = 
-        session.sessionId &&              // sessionId 존재
-        session.startTime &&               // startTime 존재
-        session.sessionName &&             // sessionName 존재
-        session.startTime !== 'null' &&    // 문자열 'null' 아님
-        session.sessionId !== 0 &&         // 0 아님
-        !isInvalidDate(session.startTime)  // 유효한 날짜
-      
-      if (!isValid) {
-        console.warn('⚠️ 잘못된 세션 발견 (자동 제외):', session)
-      }
-      
-      return isValid
-    })
-    
-    console.log(`✅ 총 ${allSessions.length}개 중 ${validSessions.length}개의 유효한 세션 로드`)
-    setSessions(validSessions)
-    
-    // 통계는 유효한 세션 기준으로 재계산
-    const statistics = calculateStatistics(validSessions)
-    setStats(statistics)
-  }
-
-  // ✅ 추가: 잘못된 날짜 체크 (1970년 등)
-  const isInvalidDate = (dateString) => {
+  // ✅ 직접 fetch 사용하도록 수정
+  const loadSessions = async () => {
     try {
-      const date = new Date(dateString)
-      // 1970년이면 잘못된 데이터
-      return date.getFullYear() === 1970 || isNaN(date.getTime())
-    } catch {
-      return true
+      setLoading(true)
+      setError(null)
+      
+      const token = getToken()
+      
+      console.log('📡 세션 목록 요청 중...')
+      
+      const response = await fetch(`${API_BASE_URL}/zoom/sessions/`, {
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`세션 목록을 불러올 수 없습니다 (${response.status})`)
+      }
+
+      const data = await response.json()
+      console.log('✅ 세션 목록 로드 완료:', data)
+      
+      // ✅ 백엔드 응답 형식에 따라 처리
+      const sessionList = Array.isArray(data) ? data : (data.results || data.sessions || [])
+      
+      setSessions(sessionList)
+      
+      const statistics = calculateStatistics(sessionList)
+      setStats(statistics)
+      
+    } catch (err) {
+      console.error('❌ 세션 목록 로드 실패:', err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
-  // ✅ 추가: 유효한 세션으로 통계 재계산
-  const calculateStatistics = (validSessions) => {
-    const totalSessions = validSessions.length
-    const deepfakeSessions = validSessions.filter(s => s.deepfakeCount > 0).length
-    const totalCaptures = validSessions.reduce((sum, s) => sum + s.totalCaptures, 0)
-    const totalDeepfakes = validSessions.reduce((sum, s) => sum + s.deepfakeCount, 0)
+  const calculateStatistics = (sessionList) => {
+    const totalSessions = sessionList.length
+    const deepfakeSessions = sessionList.filter(s => s.suspicious_detections > 0).length
+    const totalCaptures = sessionList.reduce((sum, s) => sum + (s.total_captures || 0), 0)
+    const totalDeepfakes = sessionList.reduce((sum, s) => sum + (s.suspicious_detections || 0), 0)
     
     return {
       totalSessions,
@@ -73,30 +75,17 @@ function DetectionHistoryPage() {
   }
 
   const handleGoBack = () => {
-    navigate('/')
+    navigate('/')  // ✅ '/home'이 아니라 '/'로 수정
   }
 
   const handleSessionClick = (sessionId) => {
     navigate(`/history/${sessionId}`)
   }
 
-  const handleDeleteSession = (sessionId, e) => {
-    e.stopPropagation() // 카드 클릭 이벤트 방지
-    
-    if (window.confirm('이 세션을 삭제하시겠습니까?')) {
-      const success = deleteSession(sessionId)
-      if (success) {
-        loadSessions() // 목록 새로고침
-      }
-    }
-  }
-
-  // 필터링된 세션
   const filteredSessions = filter === 'deepfake' 
-    ? sessions.filter(s => s.deepfakeCount > 0)
+    ? sessions.filter(s => s.suspicious_detections > 0)
     : sessions
 
-  // ✅ 수정: 안전한 날짜 포맷팅
   const formatDuration = (startTime, endTime) => {
     if (!endTime || !startTime) return '-'
     
@@ -104,7 +93,6 @@ function DetectionHistoryPage() {
       const start = new Date(startTime)
       const end = new Date(endTime)
       
-      // 유효하지 않은 날짜 체크
       if (isNaN(start.getTime()) || isNaN(end.getTime())) return '-'
       
       const diffMs = end - start
@@ -116,16 +104,12 @@ function DetectionHistoryPage() {
     }
   }
 
-  // ✅ 추가: 안전한 날짜 표시
   const formatDate = (dateString) => {
-    if (!dateString || dateString === 'null') return '알 수 없음'
+    if (!dateString) return '알 수 없음'
     
     try {
       const date = new Date(dateString)
-      // 1970년이면 잘못된 데이터
-      if (date.getFullYear() === 1970 || isNaN(date.getTime())) {
-        return '알 수 없음'
-      }
+      if (isNaN(date.getTime())) return '알 수 없음'
       
       return date.toLocaleString('ko-KR', {
         year: 'numeric',
@@ -141,6 +125,50 @@ function DetectionHistoryPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="history-container">
+        <header className="history-header">
+          <button className="back-button" onClick={handleGoBack}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <h1>딥페이크 탐지 기록</h1>
+          <div style={{ width: '40px' }}></div>
+        </header>
+        <main className="history-content">
+          <div className="loading">로딩 중...</div>
+        </main>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="history-container">
+        <header className="history-header">
+          <button className="back-button" onClick={handleGoBack}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <h1>딥페이크 탐지 기록</h1>
+          <div style={{ width: '40px' }}></div>
+        </header>
+        <main className="history-content">
+          <div className="error">
+            <p>데이터를 불러오는 중 오류가 발생했습니다.</p>
+            <p>{error}</p>
+            <button className="primary-button" onClick={loadSessions} style={{ marginTop: '20px' }}>
+              다시 시도
+            </button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="history-container">
       <header className="history-header">
@@ -154,7 +182,6 @@ function DetectionHistoryPage() {
       </header>
 
       <main className="history-content">
-        {/* 통계 카드 */}
         {stats && (
           <div className="stats-card">
             <h2>전체 통계</h2>
@@ -179,7 +206,6 @@ function DetectionHistoryPage() {
           </div>
         )}
 
-        {/* 필터 버튼 */}
         <div className="filter-buttons">
           <button 
             className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
@@ -191,11 +217,10 @@ function DetectionHistoryPage() {
             className={`filter-btn ${filter === 'deepfake' ? 'active' : ''}`}
             onClick={() => setFilter('deepfake')}
           >
-            딥페이크만 ({sessions.filter(s => s.deepfakeCount > 0).length})
+            딥페이크만 ({sessions.filter(s => s.suspicious_detections > 0).length})
           </button>
         </div>
 
-        {/* 세션 목록 */}
         {filteredSessions.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">
@@ -219,13 +244,12 @@ function DetectionHistoryPage() {
           <div className="sessions-list">
             {filteredSessions.map((session) => (
               <div 
-                key={session.sessionId} 
-                className={`session-card ${session.deepfakeCount > 0 ? 'danger' : 'safe'}`}
-                onClick={() => handleSessionClick(session.sessionId)}
+                key={session.session_id} 
+                className={`session-card ${session.suspicious_detections > 0 ? 'danger' : 'safe'}`}
+                onClick={() => handleSessionClick(session.session_id)}
               >
-                {/* 상태 배지 */}
                 <div className="session-badge">
-                  {session.deepfakeCount > 0 ? (
+                  {session.suspicious_detections > 0 ? (
                     <>
                       <span className="badge-icon">🚨</span>
                       <span>딥페이크 감지</span>
@@ -238,44 +262,29 @@ function DetectionHistoryPage() {
                   )}
                 </div>
 
-                {/* 세션 정보 */}
                 <div className="session-info">
-                  <h3 className="session-name">{session.sessionName}</h3>
+                  <h3 className="session-name">{session.session_name}</h3>
                   <p className="session-time">
-                    {/* ✅ 수정: 안전한 날짜 표시 */}
-                    {formatDate(session.startTime)}
+                    {formatDate(session.start_time)}
                   </p>
                   <p className="session-duration">
-                    소요시간: {formatDuration(session.startTime, session.endTime)}
+                    소요시간: {formatDuration(session.start_time, session.end_time)}
                   </p>
                 </div>
 
-                {/* 통계 */}
                 <div className="session-stats">
                   <div className="stat-row">
                     <span className="stat-label">총 분석</span>
-                    <span className="stat-value">{session.totalCaptures}장</span>
+                    <span className="stat-value">{session.total_captures}장</span>
                   </div>
-                  {session.deepfakeCount > 0 && (
+                  {session.suspicious_detections > 0 && (
                     <div className="stat-row danger">
                       <span className="stat-label">딥페이크</span>
-                      <span className="stat-value">{session.deepfakeCount}장</span>
+                      <span className="stat-value">{session.suspicious_detections}장</span>
                     </div>
                   )}
                 </div>
 
-                {/* 삭제 버튼 */}
-                <button 
-                  className="delete-button"
-                  onClick={(e) => handleDeleteSession(session.sessionId, e)}
-                  title="세션 삭제"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-
-                {/* 화살표 */}
                 <div className="session-arrow">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                     <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

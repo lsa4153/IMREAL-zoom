@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { saveZoomSession, addMockAIResults } from '../utils/storage'
+import { startZoomSession, sendCapture, endZoomSession } from '../utils/api'
+import { getToken, logout } from '../utils/auth'  
 import './HomePage.css'
+
+// ✅ 백엔드 API URL
+const API_BASE_URL = 'http://localhost:8000/api'
 
 function HomePage() {
   const navigate = useNavigate()
@@ -9,24 +13,13 @@ function HomePage() {
   const [capturedImages, setCapturedImages] = useState([])
   const [showCapturedImages, setShowCapturedImages] = useState(false)
   
-  // ✅ 세션 정보를 ref로 관리 (비동기 문제 해결)
-  const sessionDataRef = useRef({
-    sessionId: null,
-    startTime: null,
-    sessionName: null
-  })
-  
+  const sessionIdRef = useRef(null)  // ✅ 백엔드 세션 ID 저장
   const streamRef = useRef(null)
   const videoRef = useRef(null)
   const intervalRef = useRef(null)
   const capturedImagesRef = useRef([])
-  const lastNotificationRef = useRef(null) // ✅ 추가: 마지막 알림 추적
 
-  // ✅ 추가: 알림 권한 요청 및 정리
   useEffect(() => {
-    // 페이지 로드 시 알림 권한 요청
-    requestNotificationPermission()
-    
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop())
@@ -34,11 +27,6 @@ function HomePage() {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
       }
-      // ✅ 알림 닫기
-      if (lastNotificationRef.current) {
-        lastNotificationRef.current.close()
-      }
-      // URL 메모리 정리
       capturedImagesRef.current.forEach(img => {
         if (img.url && img.url.startsWith('blob:')) {
           URL.revokeObjectURL(img.url)
@@ -46,8 +34,6 @@ function HomePage() {
       })
     }
   }, [])
-
-  // ✅ 추가: 알림 권한 요청 함수
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) {
       console.warn('⚠️ 이 브라우저는 알림을 지원하지 않습니다')
@@ -58,56 +44,50 @@ function HomePage() {
       const permission = await Notification.requestPermission()
       if (permission === 'granted') {
         console.log('✅ 알림 권한이 허용되었습니다')
-        // 테스트 알림
         new Notification('알림 설정 완료', {
           body: '딥페이크 감지 시 실시간으로 알림을 받을 수 있습니다',
-          icon: '/logo.png'
         })
-      } else {
-        console.warn('⚠️ 알림 권한이 거부되었습니다')
       }
     }
   }
 
-  // ✅ 수정: 이전 알림 닫고 새 알림 표시
-  const showDeepfakeAlert = (imageData, analysisResult) => {
-    if (Notification.permission !== 'granted') {
-      console.warn('⚠️ 알림 권한이 없습니다')
-      return
+  const handleLogout = async () => {
+    if (window.confirm('로그아웃 하시겠습니까?')) {
+      try {
+        await logout()
+        navigate('/login', { replace: true })
+      } catch (error) {
+        console.error('❌ 로그아웃 실패:', error)
+        alert('로그아웃 중 오류가 발생했습니다.')
+      }
     }
-
-    // ✅ 이전 알림이 있으면 먼저 닫기
-    if (lastNotificationRef.current) {
-      lastNotificationRef.current.close()
-      console.log('🔕 이전 알림 닫기')
-    }
-
-    // 새 브라우저 알림 표시
-    const notification = new Notification('🚨 딥페이크 감지!', {
-      body: `신뢰도: ${analysisResult.confidence}%\n즉시 확인이 필요합니다.`,
-      icon: '/warning-icon.png',
-      badge: '/badge-icon.png',
-      tag: `deepfake-${Date.now()}`, // 고유한 tag
-      requireInteraction: true, // 사용자가 직접 닫을 때까지 유지
-      silent: false,
-      timestamp: Date.now()
-    })
-
-    // 알림 클릭 시 웹사이트로 포커스
-    notification.onclick = () => {
-      window.focus()
-      notification.close()
-    }
-
-    // ✅ 현재 알림 저장
-    lastNotificationRef.current = notification
-
-    console.log('🚨 새로운 딥페이크 알림 표시:', analysisResult)
   }
+
 
   const handleStartRecording = async () => {
     try {
-      // 화면 캡처 스트림 요청
+      // ✅ 1단계: 백엔드에 세션 시작 요청
+      const sessionName = `${new Date().toLocaleString('ko-KR')} 면접`
+      const token = getToken()
+      
+      const sessionResponse = await fetch(`${API_BASE_URL}/zoom/sessions/start/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify({ session_name: sessionName })
+      })
+
+      if (!sessionResponse.ok) {
+        throw new Error('세션 시작 실패')
+      }
+
+      const sessionData = await sessionResponse.json()
+      sessionIdRef.current = sessionData.session_id  // ✅ 세션 ID 저장
+      console.log('✅ 백엔드 세션 시작:', sessionData)
+
+      // ✅ 2단계: 화면 캡처 시작
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           mediaSource: 'screen',
@@ -118,7 +98,6 @@ function HomePage() {
 
       streamRef.current = stream
       
-      // 비디오 엘리먼트에 스트림 연결 (숨겨진 상태)
       if (!videoRef.current) {
         videoRef.current = document.createElement('video')
         videoRef.current.srcObject = stream
@@ -129,16 +108,7 @@ function HomePage() {
       setCapturedImages([])
       capturedImagesRef.current = []
 
-      // ✅ 세션 정보 초기화 (ref에 직접 저장)
-      const newSession = {
-        sessionId: Date.now(),
-        startTime: new Date().toISOString(),
-        sessionName: `${new Date().toLocaleString('ko-KR')} 면접`
-      }
-      sessionDataRef.current = newSession
-      console.log('📹 세션 시작:', newSession)
-
-      // 5초마다 캡처
+      // ✅ 5초마다 캡처
       intervalRef.current = setInterval(() => {
         captureScreen()
       }, 5000)
@@ -146,25 +116,26 @@ function HomePage() {
       // 첫 번째 캡처 즉시 실행
       setTimeout(() => captureScreen(), 500)
 
-      console.log('녹화 시작!')
+      console.log('🎬 녹화 시작!')
       
-      // 사용자가 화면 공유를 중단하면 자동으로 녹화 종료
       stream.getVideoTracks()[0].onended = () => {
         handleStopRecording()
       }
 
     } catch (error) {
-      console.error('화면 캡처 시작 실패:', error)
-      alert('화면 캡처를 시작할 수 없습니다. 권한을 확인해주세요.')
+      console.error('❌ 녹화 시작 실패:', error)
+      alert('녹화를 시작할 수 없습니다: ' + error.message)
     }
   }
 
-  // ✅ 수정: 실시간 분석 추가
+  // ✅ 캡처 함수 (원래 코드 유지)
   const captureScreen = async () => {
-    if (!videoRef.current || !streamRef.current) return
+    if (!videoRef.current || !streamRef.current) {
+      console.warn('⚠️ 비디오 또는 스트림이 없습니다')
+      return
+    }
 
     try {
-      // 캔버스 생성
       const canvas = document.createElement('canvas')
       canvas.width = videoRef.current.videoWidth
       canvas.height = videoRef.current.videoHeight
@@ -172,13 +143,13 @@ function HomePage() {
       const ctx = canvas.getContext('2d')
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height)
 
-      // ✅ Base64로 변환 (LocalStorage 저장 가능)
+      // Base64로 변환
       const base64Image = canvas.toDataURL('image/jpeg', 0.9)
       
       const timestamp = new Date().toISOString()
       const imageData = {
-        id: Date.now() + Math.random(), // ✅ 고유 ID 보장
-        url: base64Image, // ✅ Base64 이미지
+        id: Date.now() + Math.random(),
+        url: base64Image,
         timestamp: timestamp,
         width: canvas.width,
         height: canvas.height
@@ -187,137 +158,106 @@ function HomePage() {
       setCapturedImages(prev => [...prev, imageData])
       capturedImagesRef.current.push(imageData)
       
-      console.log('화면 캡처 완료:', timestamp)
+      console.log('📸 화면 캡처 완료:', timestamp)
       console.log('📊 현재 캡처 개수:', capturedImagesRef.current.length)
 
-      // ✅ 추가: 실시간 AI 분석 (Mock)
-      await analyzeImageRealtime(imageData)
-
-      // TODO: 실제 백엔드 연동
-      // await sendToBackend(base64Image, timestamp)
+      // ✅ 백엔드로 전송
+      await sendToBackend(base64Image)
 
     } catch (error) {
-      console.error('화면 캡처 실패:', error)
+      console.error('❌ 화면 캡처 실패:', error)
     }
   }
 
-  // ✅ 추가: 실시간 AI 분석 함수
-  const analyzeImageRealtime = async (imageData) => {
+  // ✅ 백엔드로 캡처 전송
+  const sendToBackend = async (base64Image) => {
     try {
-      // ✅ Mock AI 분석 (90% 확률로 딥페이크)
-      const isDeepfake = Math.random() > 0.1
-      const confidence = isDeepfake 
-        ? parseFloat((Math.random() * 20 + 75).toFixed(1)) // 75-95%
-        : parseFloat((Math.random() * 30 + 10).toFixed(1)) // 10-40%
+      const token = getToken()
+      
+      // Base64를 Blob으로 변환
+      const blob = await (await fetch(base64Image)).blob()
+      
+      // FormData 생성
+      const formData = new FormData()
+      formData.append('screenshot', blob, `capture_${Date.now()}.jpg`)
+      formData.append('participant_count', 1)  // 참가자 수 (필요시 수정)
 
-      const analysisResult = {
-        isDeepfake: isDeepfake,
-        confidence: confidence,
-        timestamp: imageData.timestamp
+      const response = await fetch(
+        `${API_BASE_URL}/zoom/sessions/${sessionIdRef.current}/capture/`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${token}`
+          },
+          body: formData
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('백엔드 전송 실패')
       }
 
-      console.log('🔍 실시간 분석 결과:', analysisResult)
-
-      // ✅ 딥페이크 감지 시 즉시 알림
-      if (isDeepfake) {
-        showDeepfakeAlert(imageData, analysisResult)
-      }
-
-      return analysisResult
-
-      // TODO: 실제 백엔드 연동 시
-      /*
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          image: imageData.url,
-          sessionId: sessionDataRef.current.sessionId 
-        })
-      })
       const result = await response.json()
-      
-      if (result.isDeepfake) {
-        showDeepfakeAlert(imageData, result)
+      console.log('✅ 백엔드 전송 성공:', result)
+
+      // ✅ 딥페이크 감지 시 알림
+      if (result.is_deepfake) {
+        alert(`🚨 딥페이크 감지!\n신뢰도: ${result.confidence}%`)
       }
-      
-      return result
-      */
 
     } catch (error) {
-      console.error('❌ AI 분석 실패:', error)
-      return null
+      console.error('❌ 백엔드 전송 실패:', error)
     }
   }
 
-  const handleStopRecording = () => {
-    // 인터벌 정리
+  const handleStopRecording = async () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
       intervalRef.current = null
     }
 
-    // 스트림 정리
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
       streamRef.current = null
     }
 
-    // 비디오 엘리먼트 정리
     if (videoRef.current) {
       videoRef.current.srcObject = null
       videoRef.current = null
     }
 
-    // ✅ 알림 정리
-    if (lastNotificationRef.current) {
-      lastNotificationRef.current.close()
-      lastNotificationRef.current = null
-    }
-
     setIsRecording(false)
     
     const finalCount = capturedImagesRef.current.length
-    console.log('녹화 종료!', `총 ${finalCount}개의 이미지 캡처됨`)
+    console.log('⏹️ 녹화 종료!', `총 ${finalCount}개 캡처`)
 
-    // 세션 저장
-    if (finalCount > 0) {
-      saveSession()
-    } else {
-      console.warn('⚠️ 캡처된 이미지가 없어서 저장하지 않습니다.')
-    }
-  }
+    // ✅ 백엔드에 세션 종료 요청
+    if (sessionIdRef.current) {
+      try {
+        const token = getToken()
+        const response = await fetch(
+          `${API_BASE_URL}/zoom/sessions/${sessionIdRef.current}/end/`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Token ${token}`
+            }
+          }
+        )
 
-  // ✅ 세션 저장 함수 (ref에서 직접 가져오기)
-  const saveSession = () => {
-    const analyzedCaptures = addMockAIResults(capturedImagesRef.current)
-    
-    // 딥페이크 개수 계산
-    const deepfakeCount = analyzedCaptures.filter(c => c.isDeepfake).length
-    
-    // ✅ ref에서 세션 정보 가져오기
-    const completeSession = {
-      ...sessionDataRef.current, // ✅ ref 사용
-      endTime: new Date().toISOString(),
-      captures: analyzedCaptures,
-      totalCaptures: analyzedCaptures.length,
-      deepfakeCount: deepfakeCount,
-      status: 'completed'
-    }
-    
-    console.log('💾 저장할 세션 데이터:', completeSession)
-    
-    // LocalStorage에 저장
-    const success = saveZoomSession(completeSession)
-    
-    if (success) {
-      console.log('✅ 세션 저장 완료:', completeSession)
-      
-      // 딥페이크 감지 알림
-      if (deepfakeCount > 0) {
-        alert(`🚨 딥페이크 ${deepfakeCount}건이 감지되었습니다!\n탐지 기록에서 확인하세요.`)
-      } else {
-        alert('✅ 모든 참가자가 안전합니다.')
+        if (response.ok) {
+          const result = await response.json()
+          console.log('✅ 세션 종료:', result)
+          
+          if (result.deepfake_count > 0) {
+            alert(`🚨 딥페이크 ${result.deepfake_count}건 감지!\n탐지 기록에서 확인하세요.`)
+          } else {
+            alert('✅ 모든 참가자가 안전합니다.')
+          }
+        }
+      } catch (error) {
+        console.error('❌ 세션 종료 요청 실패:', error)
       }
     }
   }
@@ -338,7 +278,6 @@ function HomePage() {
   }
 
   const clearCapturedImages = () => {
-    // Blob URL 메모리 해제
     capturedImages.forEach(img => {
       if (img.url && img.url.startsWith('blob:')) {
         URL.revokeObjectURL(img.url)
@@ -350,9 +289,13 @@ function HomePage() {
 
   return (
     <div className="home-container">
-      {/* 메인 컨텐츠 */}
+      <button className="logout-button" onClick={handleLogout}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        <span>로그아웃</span>
+      </button>
       <main className="main-content">
-        {/* 일러스트레이션 */}
         <div className="illustration">
           <div className="laptop-illustration">
             <div className="screen">
@@ -368,18 +311,15 @@ function HomePage() {
           <div className="check-icon check-4">✓</div>
         </div>
 
-        {/* 타이틀 */}
         <h1 className="main-title">
           Zoom <span className="highlight">Deepfake 탐지</span>
         </h1>
 
-        {/* 설명 */}
         <p className="description">
           실시간 화상 면접 중 딥페이크를 자동으로 감지하고,<br />
           안전한 채용 환경을 만들어드립니다.
         </p>
 
-        {/* 버튼 그룹 */}
         <div className="button-group">
           {!isRecording ? (
             <>
@@ -411,16 +351,13 @@ function HomePage() {
           )}
         </div>
 
-        {/* 녹화 중 표시 */}
         {isRecording && (
           <div className="recording-indicator">
             <span className="recording-dot"></span>
-            {/* ✅ state 사용 (리렌더링 됨) */}
             <span>녹화 중... ({capturedImages.length}개 캡처됨)</span>
           </div>
         )}
 
-        {/* 캡처된 이미지 확인 버튼 */}
         {capturedImages.length > 0 && (
           <div className="captured-images-controls">
             <button className="view-captures-button" onClick={toggleCapturedImages}>
@@ -437,7 +374,6 @@ function HomePage() {
           </div>
         )}
 
-        {/* 캡처된 이미지 미리보기 모달 */}
         {showCapturedImages && capturedImages.length > 0 && (
           <div className="modal-overlay" onClick={toggleCapturedImages}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>

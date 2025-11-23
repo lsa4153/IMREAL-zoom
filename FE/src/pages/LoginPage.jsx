@@ -1,3 +1,4 @@
+// FE/src/pages/LoginPage.jsx
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login, register, isAuthenticated } from '../utils/auth'
@@ -15,11 +16,11 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   // ✅ 이미 로그인되어 있으면 홈으로 리다이렉트
-  /*useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated()) {
-      navigate('/', { replace: true })
+      navigate('/home', { replace: true })
     }
-  }, [navigate])*/
+  }, [navigate])
 
   const handleChange = (e) => {
     setFormData({
@@ -34,13 +35,13 @@ function LoginPage() {
 
     try {
       if (isLogin) {
-        // ✅ auth.js의 login 함수 사용
+        // ✅ 로그인
         const result = await login(formData.email, formData.password)
 
         if (result.success) {
           console.log('✅ 로그인 성공:', result.user)
           alert(`환영합니다, ${result.user.nickname}님!`)
-          navigate('/', { replace: true })
+          navigate('/home', { replace: true })  // ✅ /home으로 변경
         } else {
           alert(result.error || '로그인에 실패했습니다.')
         }
@@ -52,7 +53,6 @@ function LoginPage() {
           return
         }
 
-        // ✅ auth.js의 register 함수 사용
         const result = await register(
           formData.email, 
           formData.password, 
@@ -62,8 +62,7 @@ function LoginPage() {
         if (result.success) {
           console.log('✅ 회원가입 성공:', result.user)
           alert(`회원가입 성공! 환영합니다, ${result.user.nickname}님!`)
-          // 자동 로그인되므로 바로 홈으로
-          navigate('/', { replace: true })
+          navigate('/home', { replace: true })  // ✅ /home으로 변경
         } else {
           alert(result.error || '회원가입에 실패했습니다.')
         }
@@ -78,7 +77,7 @@ function LoginPage() {
 
   return (
     <div className="login-container">
-      {/* ✅ 배경 버블 애니메이션 - 5개로 증가 */}
+      {/* 배경 버블 애니메이션 */}
       <div className="login-background">
         <div className="bubble bubble-1"></div>
         <div className="bubble bubble-2"></div>
