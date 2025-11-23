@@ -82,11 +82,13 @@ function LoginPage() {
 
   return (
     <div className="login-container">
-      {/* ✅ 배경 버블 애니메이션 */}
+      {/* ✅ 배경 버블 애니메이션 - 5개로 증가 */}
       <div className="login-background">
         <div className="bubble bubble-1"></div>
         <div className="bubble bubble-2"></div>
         <div className="bubble bubble-3"></div>
+        <div className="bubble bubble-4"></div>
+        <div className="bubble bubble-5"></div>
       </div>
 
       <div className="login-card">

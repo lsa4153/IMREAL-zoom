@@ -3,13 +3,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: white;
   padding: 20px;
   position: relative;
   overflow: hidden;
 }
 
-/* ✅ 배경 버블 애니메이션 유지 */
+/* ✅ 배경 버블 - 청록색 그라데이션 */
 .login-background {
   position: absolute;
   inset: 0;
@@ -19,44 +19,65 @@
 
 .bubble {
   position: absolute;
-  background: rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   animation: float 20s ease-in-out infinite;
+  opacity: 0.5;
 }
 
 .bubble-1 {
-  width: 400px;
-  height: 400px;
+  width: 300px;
+  height: 300px;
+  background: linear-gradient(135deg, #40C4C4, #2B9A9A);
   top: -100px;
-  right: -100px;
+  right: -80px;
   animation-delay: 0s;
 }
 
 .bubble-2 {
-  width: 300px;
-  height: 300px;
-  bottom: -150px;
-  left: -100px;
+  width: 250px;
+  height: 250px;
+  background: linear-gradient(225deg, #2B9A9A, #40C4C4);
+  bottom: -100px;
+  left: -60px;
   animation-delay: 5s;
 }
 
 .bubble-3 {
+  width: 180px;
+  height: 180px;
+  background: linear-gradient(315deg, #3BC9C9, #2196A3);
+  top: 40%;
+  right: 10%;
+  animation-delay: 10s;
+}
+
+.bubble-4 {
+  width: 150px;
+  height: 150px;
+  background: linear-gradient(45deg, #2196A3, #40C4C4);
+  bottom: 20%;
+  right: 5%;
+  animation-delay: 15s;
+}
+
+.bubble-5 {
   width: 200px;
   height: 200px;
-  top: 50%;
-  left: 50%;
-  animation-delay: 10s;
+  background: linear-gradient(180deg, #40C4C4, #2B9A9A);
+  top: 15%;
+  left: 8%;
+  animation-delay: 7s;
 }
 
 @keyframes float {
   0%, 100% {
-    transform: translate(0, 0) scale(1);
+    transform: translate(0, 0) scale(1) rotate(0deg);
   }
   33% {
-    transform: translate(30px, -30px) scale(1.1);
+    transform: translate(30px, -30px) scale(1.1) rotate(120deg);
   }
   66% {
-    transform: translate(-20px, 20px) scale(0.9);
+    transform: translate(-20px, 20px) scale(0.9) rotate(240deg);
   }
 }
 
@@ -67,10 +88,30 @@
   padding: 40px;
   width: 100%;
   max-width: 440px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 
+    0 20px 60px rgba(102, 126, 234, 0.15),
+    0 0 0 1px rgba(102, 126, 234, 0.1);
   animation: slideUp 0.6s ease-out;
   position: relative;
   z-index: 1;
+  border: 3px solid transparent;  /* ✅ 투명 테두리 */
+  background-clip: padding-box;
+}
+
+/* ✅ 그라데이션 테두리 효과 */
+.login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 24px;
+  padding: 3px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 @keyframes slideUp {
@@ -279,7 +320,7 @@
   }
 
   .logo-image {
-    width: 84px;  /* ✅ 모바일에서는 더 작게 */
+    width: 64px;  /* ✅ 모바일에서는 더 작게 */
   }
 
   .tagline {
@@ -303,16 +344,26 @@
 
   /* 모바일에서 버블 크기 조정 */
   .bubble-1 {
-    width: 250px;
-    height: 250px;
-  }
-
-  .bubble-2 {
     width: 200px;
     height: 200px;
   }
 
+  .bubble-2 {
+    width: 180px;
+    height: 180px;
+  }
+
   .bubble-3 {
+    width: 120px;
+    height: 120px;
+  }
+
+  .bubble-4 {
+    width: 100px;
+    height: 100px;
+  }
+
+  .bubble-5 {
     width: 150px;
     height: 150px;
   }
