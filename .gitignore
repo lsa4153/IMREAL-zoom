@@ -56,3 +56,7 @@ __pycache__
 *.bmp
 *.svg
 *.webp
+
+# Django migrations (except __init__.py)
+**/migrations/*.py
+!**/migrations/__init__.py
