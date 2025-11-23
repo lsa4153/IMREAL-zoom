@@ -4,7 +4,7 @@ import './LoginPage.css'
 
 function LoginPage() {
   const navigate = useNavigate()
-  const [isLogin, setIsLogin] = useState(true) // true: 로그인, false: 회원가입
+  const [isLogin, setIsLogin] = useState(true)
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -26,7 +26,6 @@ function LoginPage() {
 
     try {
       if (isLogin) {
-        // 로그인 API 호출
         const response = await fetch('http://localhost:8000/api/users/login/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -47,7 +46,6 @@ function LoginPage() {
           alert(data.error || '로그인 실패')
         }
       } else {
-        // 회원가입 API 호출
         if (formData.password !== formData.passwordConfirm) {
           alert('비밀번호가 일치하지 않습니다.')
           return
@@ -82,13 +80,9 @@ function LoginPage() {
     }
   }
 
-  const toggleMode = () => {
-    setIsLogin(!isLogin)
-    setFormData({ email: '', password: '', passwordConfirm: '', nickname: '' })
-  }
-
   return (
     <div className="login-container">
+      {/* ✅ 배경 버블 애니메이션 */}
       <div className="login-background">
         <div className="bubble bubble-1"></div>
         <div className="bubble bubble-2"></div>
@@ -98,9 +92,9 @@ function LoginPage() {
       <div className="login-card">
         <div className="login-header">
           <div className="logo">
-            <img src="/logo-lock.png"  alt="IMREAL" className="logo-image" />
+            <img src="/logo-lock.png" alt="IMREAL" className="logo-image" />
           </div>
-          <p className="tagline">딥페이크 탐지 시스템</p>
+          <p className="tagline"></p>
         </div>
 
         <div className="tab-switcher">
@@ -123,68 +117,56 @@ function LoginPage() {
           {!isLogin && (
             <div className="form-group">
               <label htmlFor="nickname">닉네임</label>
-              <div className="input-wrapper">
-                <span className="input-icon">👤</span>
-                <input
-                  type="text"
-                  id="nickname"
-                  name="nickname"
-                  value={formData.nickname}
-                  onChange={handleChange}
-                  placeholder="사용할 닉네임을 입력하세요"
-                  required={!isLogin}
-                />
-              </div>
+              <input
+                type="text"
+                id="nickname"
+                name="nickname"
+                value={formData.nickname}
+                onChange={handleChange}
+                placeholder="사용할 닉네임을 입력하세요"
+                required={!isLogin}
+              />
             </div>
           )}
 
           <div className="form-group">
             <label htmlFor="email">이메일</label>
-            <div className="input-wrapper">
-              <span className="input-icon">📧</span>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="이메일을 입력하세요"
-                required
-              />
-            </div>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="이메일을 입력하세요"
+              required
+            />
           </div>
 
           <div className="form-group">
             <label htmlFor="password">비밀번호</label>
-            <div className="input-wrapper">
-              <span className="input-icon">🔒</span>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="비밀번호를 입력하세요"
-                required
-              />
-            </div>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="비밀번호를 입력하세요"
+              required
+            />
           </div>
 
           {!isLogin && (
             <div className="form-group">
               <label htmlFor="passwordConfirm">비밀번호 확인</label>
-              <div className="input-wrapper">
-                <span className="input-icon">🔑</span>
-                <input
-                  type="password"
-                  id="passwordConfirm"
-                  name="passwordConfirm"
-                  value={formData.passwordConfirm}
-                  onChange={handleChange}
-                  placeholder="비밀번호를 다시 입력하세요"
-                  required={!isLogin}
-                />
-              </div>
+              <input
+                type="password"
+                id="passwordConfirm"
+                name="passwordConfirm"
+                value={formData.passwordConfirm}
+                onChange={handleChange}
+                placeholder="비밀번호를 다시 입력하세요"
+                required={!isLogin}
+              />
             </div>
           )}
 
@@ -200,7 +182,7 @@ function LoginPage() {
         <div className="login-footer">
           <p>
             {isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?'}
-            <button onClick={toggleMode} className="toggle-btn">
+            <button onClick={() => setIsLogin(!isLogin)} className="toggle-btn">
               {isLogin ? '회원가입' : '로그인'}
             </button>
           </p>
