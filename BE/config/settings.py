@@ -270,7 +270,7 @@ AWS_REGION = os.getenv('AWS_REGION', 'ap-northeast-2')
 AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com'
 
 # S3 URL 만료 시간 (초)
-AWS_PRESIGNED_URL_EXPIRATION = 3600  # 1시간
+AWS_PRESIGNED_URL_EXPIRATION = 259200  # 1시간
 
 # S3 사용 설정
 USE_S3_FOR_PROTECTION = os.getenv('USE_S3_FOR_PROTECTION', 'False') == 'True'

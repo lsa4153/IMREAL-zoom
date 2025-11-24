@@ -101,7 +101,7 @@ class ZoomCaptureView(APIView):
                 uploaded_file=screenshot,
                 file_type='screenshot',
                 purpose='zoom',
-                is_temporary=True,
+                is_temporary=False,
                 metadata={'session_id': session_id},
                 use_s3=True
             )
@@ -202,12 +202,13 @@ class ZoomCaptureView(APIView):
             # ✅ 즉시 응답
             return Response({
                 'capture_id': capture.capture_id,
-                'session_id': session.session_id,  # ✅ 추가
-                'image_url': None,  # 일단 None (조회 API에서 제공)
-                'timestamp': capture.capture_timestamp.isoformat(),  # ✅ 추가
+                'session_id': session.session_id,
+                'image_url': s3_url,  # ✅ 수정: None → s3_url
+                'download_url': s3_url,  # ✅ 추가
+                'timestamp': capture.capture_timestamp.isoformat(),
                 'is_deepfake': is_deepfake,
-                'confidence': float(confidence_score),  # ✅ confidence_score → confidence
-                'ai_result': {  # ✅ 구조 변경
+                'confidence': float(confidence_score),
+                'ai_result': {
                     'face_count': len(detection_details) if detection_details else 0,
                     'face_quality_scores': detection_details or []
                 },

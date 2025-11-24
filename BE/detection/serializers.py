@@ -18,6 +18,7 @@ class AnalysisRecordSerializer(serializers.ModelSerializer):
     # ✅ 동적 URL 생성
     image_url = serializers.SerializerMethodField()
     heatmap_url = serializers.SerializerMethodField()
+    detection_details = serializers.SerializerMethodField()
     
     class Meta:
         model = AnalysisRecord
@@ -51,6 +52,30 @@ class AnalysisRecordSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
     
+    def get_detection_details(self, obj):
+        """detection_details의 ResultUrl을 최신 Presigned URL로 변환"""
+        if not obj.detection_details:
+            return None
+        
+        import copy
+        import re
+        from media_files.storage import S3Storage
+        
+        details = copy.deepcopy(obj.detection_details)
+        s3_storage = S3Storage()
+        
+        for face in details:
+            if 'ResultUrl' in face and face['ResultUrl']:
+                original_url = face['ResultUrl']
+                # S3 키 추출 (amazonaws.com/ 다음부터 ? 또는 끝까지)
+                match = re.search(r'amazonaws\.com/(.+?)(\?|$)', original_url)
+                if match:
+                    s3_key = match.group(1)
+                    # 새로운 Presigned URL 생성
+                    face['ResultUrl'] = s3_storage.get_presigned_url(s3_key)
+        
+        return details
+
     def get_is_deepfake(self, obj):
         """analysis_result를 기반으로 is_deepfake 계산"""
         return obj.analysis_result in ['suspicious', 'deepfake']
