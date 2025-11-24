@@ -176,7 +176,7 @@ class AIModelService:
         try:
             response = requests.get(
                 f"{self.fastapi_url}/health",
-                timeout=2  # 빠른 타임아웃
+                timeout=10  # 빠른 타임아웃
             )
             return response.status_code == 200
         except:
