@@ -31,11 +31,12 @@ function SessionDetailPage() {
       setSession(data.session)
       
       // ✅ 딥페이크로 판정된 캡처만 필터링
-      const deepfakes = data.captures.filter(
-        capture => capture.analysis_result === 'deepfake' || 
-                   capture.analysis_result === 'suspicious'
-      )
+      const deepfakes = data.captures.filter(capture => {
+        const result = capture.record?.analysis_result
+        return result === 'deepfake' || result === 'suspicious'
+      })
       
+      console.log('🚨 딥페이크 캡처:', deepfakes)
       setDeepfakeCaptures(deepfakes)
       
     } catch (err) {
@@ -60,27 +61,51 @@ function SessionDetailPage() {
 
   const downloadImage = async (capture) => {
     try {
-      // ✅ record에서 이미지 URL 가져오기
-      const imageUrl = capture.record?.original_path
+      // ✅ record에서 image_url 또는 original_path 가져오기
+      const imageUrl = capture.record?.image_url || capture.record?.original_path
+      
       if (!imageUrl) {
+        console.error('❌ 이미지 URL 없음:', capture)
         alert('이미지를 찾을 수 없습니다.')
         return
       }
       
-      // 이미지 다운로드
-      const response = await fetch(imageUrl)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
+      console.log('📥 다운로드 시작:', imageUrl)
       
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `deepfake_${capture.capture_id}_${new Date(capture.capture_timestamp).getTime()}.jpg`
-      link.click()
+      try {
+        // ✅ 방법 1: fetch로 시도 (CORS가 허용되면 이게 가장 좋음)
+        const response = await fetch(imageUrl)
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `deepfake_${capture.capture_id}_${new Date(capture.capture_timestamp).getTime()}.jpg`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        window.URL.revokeObjectURL(url)
+        console.log('✅ 다운로드 완료')
+        
+      } catch (fetchError) {
+        console.warn('⚠️ fetch 실패, 직접 링크로 시도:', fetchError)
+        
+        // ✅ 방법 2: fetch 실패 시 직접 링크 (새 탭에서 열림)
+        const link = document.createElement('a')
+        link.href = imageUrl
+        link.download = `deepfake_${capture.capture_id}_${new Date(capture.capture_timestamp).getTime()}.jpg`
+        link.target = '_blank'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        console.log('✅ 다운로드 링크 열림 (새 탭)')
+      }
       
-      window.URL.revokeObjectURL(url)
     } catch (err) {
       console.error('❌ 이미지 다운로드 실패:', err)
-      alert('이미지 다운로드에 실패했습니다.')
+      alert('이미지 다운로드에 실패했습니다: ' + err.message)
     }
   }
 
@@ -194,7 +219,11 @@ function SessionDetailPage() {
           ) : (
             <div className="deepfake-grid">
               {deepfakeCaptures
-                .sort((a, b) => parseFloat(b.confidence_score) - parseFloat(a.confidence_score))
+                .sort((a, b) => {
+                  const confA = parseFloat(a.record?.confidence_score || 0)
+                  const confB = parseFloat(b.record?.confidence_score || 0)
+                  return confB - confA
+                })
                 .map((capture, index) => (
                   <div 
                     key={capture.capture_id} 
@@ -204,12 +233,17 @@ function SessionDetailPage() {
                     {/* 순위 배지 */}
                     <div className="rank-badge">#{index + 1}</div>
 
-                    {/* 이미지 - record에서 가져오기 */}
+                    {/* 이미지 */}
                     <div className="image-wrapper">
-                      {capture.record?.original_path ? (
+                      {(capture.record?.image_url || capture.record?.original_path) ? (
                         <img 
-                          src={capture.record.original_path} 
-                          alt={`딥페이크 ${index + 1}`} 
+                          src={capture.record.image_url || capture.record.original_path} 
+                          alt={`딥페이크 ${index + 1}`}
+                          onError={(e) => {
+                            console.error('❌ 이미지 로드 실패:', e.target.src)
+                            e.target.style.display = 'none'
+                            e.target.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f3f4f6;color:#999">이미지 로드 실패</div>'
+                          }}
                         />
                       ) : (
                         <div style={{ 
@@ -234,16 +268,16 @@ function SessionDetailPage() {
                         <div className="confidence-label">
                           <span>신뢰도</span>
                           <span className="confidence-value">
-                            {parseFloat(capture.confidence_score).toFixed(1)}%
+                            {parseFloat(capture.record?.confidence_score || 0).toFixed(1)}%
                           </span>
                         </div>
                         <div className="progress-bar">
                           <div 
                             className="progress-fill"
                             style={{ 
-                              width: `${capture.confidence_score}%`,
-                              backgroundColor: capture.confidence_score >= 90 ? '#ef4444' : 
-                                              capture.confidence_score >= 75 ? '#f59e0b' : '#10b981'
+                              width: `${capture.record?.confidence_score || 0}%`,
+                              backgroundColor: (capture.record?.confidence_score || 0) >= 90 ? '#ef4444' : 
+                                              (capture.record?.confidence_score || 0) >= 75 ? '#f59e0b' : '#10b981'
                             }}
                           ></div>
                         </div>
@@ -281,7 +315,7 @@ function SessionDetailPage() {
       </main>
 
       {/* 이미지 확대 모달 */}
-      {selectedImage && selectedImage.record?.original_path && (
+      {selectedImage && (selectedImage.record?.image_url || selectedImage.record?.original_path) && (
         <div className="modal-overlay" onClick={closeModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close" onClick={closeModal}>
@@ -291,14 +325,17 @@ function SessionDetailPage() {
             </button>
 
             <div className="modal-image-wrapper">
-              <img src={selectedImage.record.original_path} alt="확대 이미지" />
+              <img 
+                src={selectedImage.record.image_url || selectedImage.record.original_path} 
+                alt="확대 이미지" 
+              />
             </div>
 
             <div className="modal-info">
               <div className="modal-confidence">
                 <span className="confidence-label">딥페이크 신뢰도</span>
                 <span className="confidence-value">
-                  {parseFloat(selectedImage.confidence_score).toFixed(1)}%
+                  {parseFloat(selectedImage.record?.confidence_score || 0).toFixed(1)}%
                 </span>
               </div>
               <div className="modal-timestamp">
