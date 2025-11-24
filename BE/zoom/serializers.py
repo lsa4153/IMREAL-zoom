@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import ZoomSession, ZoomCapture
+from detection.serializers import AnalysisRecordSerializer
 
 
 class ZoomSessionSerializer(serializers.ModelSerializer):
@@ -122,13 +123,12 @@ class ZoomCaptureDetailSerializer(serializers.ModelSerializer):
 
 class ZoomCaptureSerializer(serializers.ModelSerializer):
     """Zoom 캡처 Serializer"""
+
+    record = AnalysisRecordSerializer(read_only=True)
     
-    analysis_result = serializers.CharField(
-        source='record.analysis_result',
-        read_only=True
-    )
+    # ✅ 이미 record에서 가져오므로 source 제거
+    analysis_result = serializers.CharField(read_only=True)
     confidence_score = serializers.DecimalField(
-        source='record.confidence_score',
         max_digits=5,
         decimal_places=2,
         read_only=True
