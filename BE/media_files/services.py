@@ -329,7 +329,7 @@ class FileService:
         )
     
     @staticmethod
-    def cleanup_temporary_files(older_than_hours: int = 24):
+    def cleanup_temporary_files(older_than_hours: int = 72):
         """
         임시 파일 정리 (Celery 태스크에서 호출)
         
