@@ -267,22 +267,6 @@ function DetectionHistoryPage() {
                   <p className="session-time">
                     {formatDate(session.start_time)}
                   </p>
-                  <p className="session-duration">
-                    소요시간: {formatDuration(session.start_time, session.end_time)}
-                  </p>
-                </div>
-
-                <div className="session-stats">
-                  <div className="stat-row">
-                    <span className="stat-label">총 분석</span>
-                    <span className="stat-value">{session.total_captures}장</span>
-                  </div>
-                  {session.suspicious_detections > 0 && (
-                    <div className="stat-row danger">
-                      <span className="stat-label">딥페이크</span>
-                      <span className="stat-value">{session.suspicious_detections}장</span>
-                    </div>
-                  )}
                 </div>
 
                 <div className="session-arrow">

@@ -168,39 +168,6 @@ function SessionDetailPage() {
       </header>
 
       <main className="detail-content">
-        {/* 세션 요약 */}
-        <div className="summary-card">
-          <div className="summary-header">
-            <div className="summary-badge danger">
-              <span className="badge-icon">🚨</span>
-              <span>딥페이크 {deepfakeCaptures.length}건 감지</span>
-            </div>
-          </div>
-
-          <div className="summary-stats">
-            <div className="summary-stat">
-              <div className="stat-label">총 분석 이미지</div>
-              <div className="stat-value">{session.total_captures}장</div>
-            </div>
-            <div className="summary-stat danger">
-              <div className="stat-label">딥페이크 감지</div>
-              <div className="stat-value">{session.suspicious_detections}장</div>
-            </div>
-            <div className="summary-stat">
-              <div className="stat-label">소요 시간</div>
-              <div className="stat-value">
-                {formatDuration(session.start_time, session.end_time)}
-              </div>
-            </div>
-            <div className="summary-stat">
-              <div className="stat-label">탐지율</div>
-              <div className="stat-value">
-                {((session.suspicious_detections / session.total_captures) * 100).toFixed(1)}%
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* 딥페이크 이미지 목록 */}
         <div className="images-section">
           <div className="section-header">
